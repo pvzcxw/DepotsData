@@ -3,11 +3,8 @@ name: Update DepotKeys
 
 on:
   schedule:
-    # 每天北京时间 08:00 自动执行
-    # UTC 00:00 = 北京时间 08:00
     - cron: '0 0 * * *'
 
-  # 允许手动执行
   workflow_dispatch:
 
 permissions:
@@ -18,34 +15,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 检出仓库
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # 下载最新文件
       - name: Download depotkeys.json
         run: |
+          set -e
+
           curl -fL --retry 3 \
             "https://api.993499094.xyz/depotkeys.json" \
             -o depotkeys.json
 
-      # 检查文件是否发生变化
-      - name: Check for changes
-        id: changes
-        run: |
-          if git diff --quiet -- depotkeys.json; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          if [ ! -s depotkeys.json ]; then
+            echo "下载失败：文件为空！"
+            exit 1
           fi
 
-      # 提交并推送更新
-      - name: Commit and push
-        if: steps.changes.outputs.changed == 'true'
+          python -m json.tool depotkeys.json > /dev/null
+
+          echo "文件下载成功，JSON 格式验证通过！"
+
+      - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add depotkeys.json
+          # 强制添加文件，兼容文件此前不存在或被忽略的情况
+          git add -f depotkeys.json
+
+          # 检查暂存区是否存在变化
+          if git diff --cached --quiet; then
+            echo "文件内容没有变化，无需提交。"
+            exit 0
+          fi
+
           git commit -m "Update depotkeys.json"
-          git push
+
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+          echo "depotkeys.json 已成功更新到仓库！"
