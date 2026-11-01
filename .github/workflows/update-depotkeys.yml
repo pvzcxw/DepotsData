@@ -1,0 +1,51 @@
+
+name: Update DepotKeys
+
+on:
+  schedule:
+    # 每天北京时间 08:00 自动执行
+    # UTC 00:00 = 北京时间 08:00
+    - cron: '0 0 * * *'
+
+  # 允许手动执行
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-depotkeys:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 检出仓库
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 下载最新文件
+      - name: Download depotkeys.json
+        run: |
+          curl -fL --retry 3 \
+            "https://api.993499094.xyz/depotkeys.json" \
+            -o depotkeys.json
+
+      # 检查文件是否发生变化
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet -- depotkeys.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 提交并推送更新
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add depotkeys.json
+          git commit -m "Update depotkeys.json"
+          git push
